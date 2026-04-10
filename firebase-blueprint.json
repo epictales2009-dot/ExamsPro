@@ -1,0 +1,112 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information for students and teachers.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "teacher"] },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "grade": { "type": "string", "description": "Student's grade level, e.g., SHS2" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "Examination details and questions.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "description": { "type": "string" },
+        "duration": { "type": "number", "description": "Duration in minutes" },
+        "questionCount": { "type": "number" },
+        "totalPoints": { "type": "number" },
+        "difficulty": { "type": "string", "enum": ["Easy", "Medium", "Hard"] },
+        "teacherId": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "active", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "type": { "type": "string", "enum": ["mcq", "short", "essay"] },
+              "question": { "type": "string" },
+              "options": { "type": "array", "items": { "type": "string" } },
+              "correctAnswer": { "type": "string" },
+              "points": { "type": "number" }
+            }
+          }
+        }
+      },
+      "required": ["title", "subject", "teacherId", "status"]
+    },
+    "Submission": {
+      "title": "Submission",
+      "description": "Student exam submission and results.",
+      "type": "object",
+      "properties": {
+        "examId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "score": { "type": "number" },
+        "percentage": { "type": "number" },
+        "status": { "type": "string", "enum": ["in-progress", "submitted", "graded"] },
+        "violations": { "type": "number" },
+        "violationLogs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "details": { "type": "string" }
+            }
+          }
+        },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "answers": { "type": "object" }
+      },
+      "required": ["examId", "studentId", "status"]
+    },
+    "ActiveSession": {
+      "title": "ActiveSession",
+      "description": "Real-time presence of students in an exam.",
+      "type": "object",
+      "properties": {
+        "examId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "studentEmail": { "type": "string" },
+        "status": { "type": "string", "enum": ["signed-in", "in-progress", "submitted"] },
+        "lastSeen": { "type": "string", "format": "date-time" }
+      },
+      "required": ["examId", "studentId", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/exams/{examId}": {
+      "schema": "Exam",
+      "description": "Exam definitions"
+    },
+    "/submissions/{submissionId}": {
+      "schema": "Submission",
+      "description": "Student submissions"
+    },
+    "/activeSessions/{sessionId}": {
+      "schema": "ActiveSession",
+      "description": "Real-time monitoring"
+    }
+  }
+}

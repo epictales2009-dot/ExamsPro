@@ -1,0 +1,8 @@
+{
+  "name": "ExamPro",
+  "description": "A secure, AI-powered examination platform for students and teachers with real-time proctoring and analytics.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

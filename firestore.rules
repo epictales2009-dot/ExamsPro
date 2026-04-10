@@ -1,0 +1,168 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: {userId}
+// Fields:
+//   - uid: string (required)
+//   - email: string (required, email format)
+//   - displayName: string
+//   - role: string (required, enum: ['student', 'teacher'])
+//   - grade: string
+//   - photoURL: string
+//   - createdAt: timestamp
+//
+// Collection: exams
+// Document ID: {examId}
+// Fields:
+//   - title: string (required)
+//   - subject: string (required)
+//   - description: string
+//   - duration: number (required)
+//   - questionCount: number
+//   - totalPoints: number
+//   - difficulty: string (enum: ['Easy', 'Medium', 'Hard'])
+//   - teacherId: string (required)
+//   - status: string (required, enum: ['draft', 'active', 'completed'])
+//   - createdAt: timestamp
+//   - questions: list (objects with id, type, question, options, correctAnswer, points)
+//
+// Collection: submissions
+// Document ID: {submissionId}
+// Fields:
+//   - examId: string (required)
+//   - studentId: string (required)
+//   - studentName: string
+//   - score: number
+//   - percentage: number
+//   - status: string (required, enum: ['in-progress', 'submitted', 'graded'])
+//   - violations: number
+//   - violationLogs: list (objects with type, timestamp, details)
+//   - submittedAt: timestamp
+//   - answers: map
+//
+// Collection: activeSessions
+// Document ID: {sessionId}
+// Fields:
+//   - examId: string (required)
+//   - studentId: string (required)
+//   - studentName: string
+//   - studentEmail: string
+//   - status: string (required, enum: ['signed-in', 'in-progress', 'submitted'])
+//   - lastSeen: timestamp
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' ||
+          (request.auth.token.email == "epictales2009@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    function isPendingTeacher() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'pending';
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'role']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.role in ['student', 'teacher'] &&
+             (!('grade' in data) || data.grade is string) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100));
+    }
+
+    function isValidExam(data) {
+      return hasRequiredFields(['title', 'subject', 'duration', 'teacherId', 'status']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.subject is string &&
+             data.duration is number && data.duration > 0 &&
+             data.teacherId == request.auth.uid &&
+             data.status in ['draft', 'active', 'completed'];
+    }
+
+    function isValidSubmission(data) {
+      return hasRequiredFields(['examId', 'studentId', 'status']) &&
+             data.examId is string &&
+             data.studentId == request.auth.uid &&
+             data.status in ['in-progress', 'submitted', 'graded'] &&
+             (!('score' in data) || data.score is number) &&
+             (!('violations' in data) || data.violations is number);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && isOwner(userId);
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role && request.resource.data.status == resource.data.status) ||
+        isAdmin()
+      );
+    }
+
+    match /exams/{examId} {
+      allow read: if isAuthenticated();
+      allow create: if isTeacher() && isValidExam(request.resource.data);
+      allow update: if isTeacher() && isValidExam(request.resource.data) && resource.data.teacherId == request.auth.uid;
+      allow delete: if isTeacher() && resource.data.teacherId == request.auth.uid;
+    }
+
+    match /submissions/{submissionId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.studentId || isTeacher());
+      allow create: if isAuthenticated() && isValidSubmission(request.resource.data);
+      allow update: if isAuthenticated() && (
+        (request.auth.uid == resource.data.studentId && isValidSubmission(request.resource.data) && request.resource.data.studentId == resource.data.studentId) ||
+        isTeacher()
+      );
+    }
+
+    match /activeSessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+  }
+}
